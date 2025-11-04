@@ -1,0 +1,12 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 16 16" aria-label="Python">
+  <title>Python</title>
+  <defs>
+    <linearGradient id="pyGrad" x1="0" x2="0" y1="0" y2="1">
+      <stop offset="0%" stop-color="#387EB8"/>
+      <stop offset="100%" stop-color="#366994"/>
+    </linearGradient>
+  </defs>
+  <rect x="1" y="1" width="14" height="14" rx="3" fill="url(#pyGrad)"/>
+  <path fill="#FFE873" d="M8 3.2h2.7c.6 0 1.1.5 1.1 1.1v2.6c0 .6-.5 1.1-1.1 1.1H8c-.6 0-1.1.5-1.1 1.1v.9H4.2c-.6 0-1.1-.5-1.1-1.1V6.4c0-.6.5-1.1 1.1-1.1h2.7c.6 0 1.1-.5 1.1-1.1v-1z"/>
+  <circle cx="9.8" cy="4.4" r=".6" fill="#fff"/>
+</svg>

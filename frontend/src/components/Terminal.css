@@ -1,0 +1,332 @@
+/* Terminal panel styles for side-by-side layout */
+.terminal-panel {
+  width: 100%;
+  height: 100%;
+  display: flex;
+  flex-direction: column;
+}
+
+.terminal-window {
+  width: 100%;
+  height: 100%;
+  background-color: #1e1e1e;
+  border-radius: 8px;
+  border: 1px solid #3e3e42;
+  display: flex;
+  flex-direction: column;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.3);
+}
+
+.terminal-window.is-minimized {
+  display: none;
+}
+
+/* Terminal header */
+.terminal-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 0.75rem 1rem;
+  background-color: #252526;
+  border-bottom: 1px solid #3e3e42;
+  border-top-left-radius: 8px;
+  border-top-right-radius: 8px;
+}
+
+.terminal-title {
+  display: flex;
+  align-items: center;
+  gap: 1rem;
+  color: #d4d4d4;
+  font-weight: 500;
+}
+
+.terminal-title.compact {
+  gap: 0.5rem;
+}
+
+.connection-status {
+  font-size: 0.9rem;
+}
+
+.status-indicator {
+  padding: 0.25rem 0.5rem;
+  border-radius: 12px;
+  font-size: 0.8rem;
+  font-weight: 500;
+}
+
+.status-indicator.connected {
+  background-color: rgba(40, 167, 69, 0.2);
+  color: #28a745;
+}
+
+.status-indicator.disconnected {
+  background-color: rgba(220, 53, 69, 0.2);
+  color: #dc3545;
+}
+
+.terminal-close-btn {
+  background: none;
+  border: none;
+  color: #d4d4d4;
+  font-size: 1.2rem;
+  cursor: pointer;
+  padding: 0.25rem 0.5rem;
+  border-radius: 4px;
+  transition: background-color 0.2s ease;
+}
+
+.terminal-close-btn:hover {
+  background-color: #3e3e42;
+  color: #ff6b6b;
+}
+
+/* Terminal body */
+.terminal-body {
+  flex: 1;
+  padding: 0;
+  overflow: hidden;
+  background-color: #1e1e1e;
+  border-bottom-left-radius: 8px;
+  border-bottom-right-radius: 8px;
+  min-height: 0; /* Important for flex container */
+  display: flex;
+  flex-direction: column;
+  position: relative;
+}
+
+.terminal-body.hidden {
+  display: none;
+}
+
+.terminal-actions {
+  display: flex;
+  align-items: center;
+}
+
+.terminal-minimize-btn {
+  background: #2d2d2d;
+  color: #d4d4d4;
+  border: 1px solid #3e3e42;
+  padding: 4px;
+  border-radius: 4px;
+  cursor: pointer;
+  font-size: 14px;
+  width: 28px;
+  height: 28px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.terminal-minimize-btn:hover {
+  background: #3a3a3a;
+}
+
+.terminal-kill-btn, .terminal-revive-btn {
+  background: #2d2d2d;
+  color: #d4d4d4;
+  border: 1px solid #3e3e42;
+  padding: 4px;
+  border-radius: 4px;
+  cursor: pointer;
+  font-size: 14px;
+  width: 28px;
+  height: 28px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  margin-left: 6px;
+}
+
+.terminal-kill-btn:hover {
+  background: #472828;
+  color: #ff8686;
+  border-color: #5a3737;
+}
+
+.terminal-revive-btn:hover {
+  background: #284747;
+  color: #7ff5f5;
+  border-color: #336060;
+}
+
+.xterm-container {
+  flex: 1;
+  position: relative;
+  background-color: #1e1e1e;
+  border-bottom-left-radius: 8px;
+  border-bottom-right-radius: 8px;
+}
+
+.xterm-container {
+  width: 100%;
+  height: 100%;
+  padding: 4px 8px 8px 8px;
+  box-sizing: border-box;
+  flex: 1;
+  overflow: hidden;
+  position: relative;
+}
+
+/* Ensure xterm fits properly */
+.xterm-container .xterm {
+  height: 100% !important;
+  width: 100% !important;
+  position: absolute !important;
+  top: 4px !important;
+  left: 8px !important;
+  right: 8px !important;
+  bottom: 8px !important;
+}
+
+.xterm-container .xterm .xterm-viewport {
+  width: 100% !important;
+  height: 100% !important;
+}
+
+.xterm-container .xterm .xterm-screen {
+  width: 100% !important;
+  height: 100% !important;
+}
+
+/* Override xterm.js styles for better visibility */
+.xterm .xterm-viewport {
+  background-color: #1e1e1e !important;
+  overflow-y: auto !important;
+  height: 100% !important;
+}
+
+.xterm .xterm-screen {
+  background-color: #1e1e1e !important;
+  height: 100% !important;
+}
+
+/* Enhanced cursor styling */
+.xterm .xterm-cursor {
+  background-color: #ffffff !important;
+  width: 8px !important;
+  opacity: 1 !important;
+}
+
+/* Better cursor visibility when terminal is focused */
+.terminal-window.focused .xterm .xterm-cursor {
+  background-color: #ffffff !important;
+  animation: smoothBlink 1.2s infinite;
+  box-shadow: 0 0 8px rgba(255, 255, 255, 0.4);
+}
+
+/* Unfocused cursor is more subtle */
+.terminal-window:not(.focused) .xterm .xterm-cursor {
+  background-color: #666666 !important;
+  opacity: 0.7 !important;
+  animation: none;
+}
+
+@keyframes smoothBlink {
+  0%, 45% {
+    opacity: 1;
+    transform: scaleX(1);
+  }
+  50%, 95% {
+    opacity: 0.3;
+    transform: scaleX(0.8);
+  }
+  100% {
+    opacity: 1;
+    transform: scaleX(1);
+  }
+}
+
+/* Ensure text is fully visible with proper line height */
+.xterm .xterm-rows {
+  line-height: 1.0 !important;
+  height: 100% !important;
+}
+
+.xterm .xterm-char-measure-element {
+  line-height: 1.0 !important;
+}
+
+/* Force proper sizing of terminal elements */
+.xterm .xterm-helper-textarea {
+  position: absolute !important;
+  opacity: 0 !important;
+  left: -9999em !important;
+}
+
+/* Ensure proper canvas sizing */
+.xterm canvas {
+  position: absolute !important;
+  left: 0 !important;
+  top: 0 !important;
+}
+
+/* Scrollbar styles for terminal */
+.xterm .xterm-viewport::-webkit-scrollbar {
+  width: 8px;
+}
+
+.xterm .xterm-viewport::-webkit-scrollbar-track {
+  background: #2d2d30;
+}
+
+.xterm .xterm-viewport::-webkit-scrollbar-thumb {
+  background: #424242;
+  border-radius: 4px;
+}
+
+.xterm .xterm-viewport::-webkit-scrollbar-thumb:hover {
+  background: #4f4f4f;
+}
+
+/* Animation for terminal open */
+.terminal-overlay {
+  animation: fadeIn 0.3s ease-out;
+}
+
+.terminal-window {
+  animation: slideIn 0.3s ease-out;
+}
+
+@keyframes fadeIn {
+  from {
+    opacity: 0;
+  }
+  to {
+    opacity: 1;
+  }
+}
+
+@keyframes slideIn {
+  from {
+    transform: translateY(-20px) scale(0.95);
+    opacity: 0;
+  }
+  to {
+    transform: translateY(0) scale(1);
+    opacity: 1;
+  }
+}
+
+/* Responsive design */
+@media (max-width: 768px) {
+  .terminal-window {
+    width: 95vw;
+    height: 90vh;
+  }
+  
+  .terminal-header {
+    padding: 0.5rem;
+  }
+  
+  .terminal-title {
+    font-size: 0.9rem;
+  }
+}
+
+/* Force left alignment of all terminal content regardless of parent container text-align */
+.terminal-panel, .terminal-window, .terminal-window .xterm, .terminal-window .xterm-rows, .terminal-window .xterm-screen {
+  text-align: left !important;
+}

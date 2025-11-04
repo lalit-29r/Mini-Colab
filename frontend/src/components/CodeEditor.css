@@ -1,0 +1,191 @@
+.code-editor-container {
+  height: 100%;
+  display: flex;
+  flex-direction: column;
+}
+
+.file-status-indicator {
+  position: absolute;
+  top: 10px;
+  left: 50%;
+  transform: translateX(-50%);
+  background-color: #2d2d30;
+  color: #cccccc;
+  padding: 8px 16px;
+  border-radius: 4px;
+  border: 1px solid #454545;
+  font-size: 13px;
+  z-index: 10;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.3);
+}
+
+.editor-wrapper {
+  position: relative;
+  flex: 1;
+}
+
+.editor-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 1rem;
+  padding-bottom: 0.5rem;
+  border-bottom: 1px solid #3e3e42;
+  gap: 1rem;
+}
+
+.editor-header h3 {
+  margin: 0;
+  color: #007acc;
+  display: flex;
+  align-items: center;
+  font-size: 1rem;
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.editor-filename-with-icon {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.unsaved-indicator {
+  color: #ffffff;
+  margin-left: 6px;
+  font-size: 1.2rem;
+}
+
+.file-path-hint {
+  color: #888888;
+  font-size: 0.8rem;
+  font-weight: normal;
+  margin-left: 8px;
+}
+
+.editor-controls {
+  display: flex;
+  gap: 0.5rem;
+  align-items: center;
+  flex-shrink: 0;
+}
+
+.sample-codes select {
+  background-color: #1e1e1e;
+  color: #ffffff;
+  border: 1px solid #3e3e42;
+  border-radius: 4px;
+  padding: 0.5rem;
+  font-size: 0.9rem;
+  cursor: pointer;
+}
+
+.sample-codes select:disabled {
+  background-color: #2d2d30;
+  color: #888888;
+  cursor: not-allowed;
+  border-color: #555555;
+}
+
+.sample-codes select:focus {
+  outline: none;
+  border-color: #007acc;
+}
+
+.sample-codes select:disabled:focus {
+  border-color: #555555;
+}
+
+.clear-btn, .save-btn, .run-btn {
+  padding: 0.5rem 1rem;
+  border: none;
+  border-radius: 4px;
+  font-size: 0.9rem;
+  font-weight: 500;
+  cursor: pointer;
+  transition: background-color 0.2s;
+}
+
+.clear-btn {
+  background-color: #6c757d;
+  color: white;
+}
+
+.clear-btn:hover:not(:disabled) {
+  background-color: #5a6268;
+}
+
+.save-btn {
+  background-color: #007acc;
+  color: white;
+}
+
+.save-btn:hover:not(:disabled) {
+  background-color: #005a9e;
+}
+
+.save-btn.has-changes {
+  background-color: #ff8c00;
+}
+
+.save-btn.has-changes:hover:not(:disabled) {
+  background-color: #e67c00;
+}
+
+.run-btn {
+  background-color: #28a745;
+  color: white;
+  font-weight: bold;
+}
+
+.run-btn:hover:not(:disabled) {
+  background-color: #218838;
+}
+
+.clear-btn:disabled, .save-btn:disabled, .run-btn:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+}
+
+.editor-wrapper {
+  flex: 1;
+  border: 1px solid #3e3e42;
+  border-radius: 4px;
+  overflow: hidden;
+}
+
+/* Monaco Editor Dark Theme Customizations */
+.monaco-editor {
+  background-color: #1e1e1e !important;
+}
+
+.monaco-editor .margin {
+  background-color: #1e1e1e !important;
+}
+
+.monaco-editor .monaco-editor-background {
+  background-color: #1e1e1e !important;
+}
+
+@media (max-width: 768px) {
+  .editor-header {
+    flex-direction: column;
+    gap: 0.5rem;
+    align-items: stretch;
+  }
+  
+  .editor-controls {
+    justify-content: space-between;
+  }
+  
+  .sample-codes {
+    flex: 1;
+  }
+  
+  .sample-codes select {
+    width: 100%;
+  }
+}

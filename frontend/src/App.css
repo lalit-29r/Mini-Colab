@@ -1,0 +1,288 @@
+.App {
+  text-align: center;
+  min-height: 100vh;
+  display: flex;
+  flex-direction: column;
+  background-color: #1e1e1e;
+  color: #ffffff;
+}
+
+.App-header {
+  background: linear-gradient(90deg,#2d2d30,#262b31 55%,#242a30);
+  height: 64px; /* fixed consistent height */
+  padding: 0 1.75rem; /* remove vertical padding, rely on flex centering */
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  box-shadow: 0 2px 4px rgba(0,0,0,0.35);
+  border-bottom: 1px solid #32363b;
+  position: relative;
+  z-index: 10;
+}
+
+.app-branding {
+  display: flex;
+  align-items: center;
+  gap: .65rem;
+  font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+}
+
+/* Animated brand mark */
+.brand-mark {
+  width: 1.05rem;
+  height: 1.05rem;
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  filter: drop-shadow(0 0 4px rgba(90,185,255,.45));
+}
+
+.brand-mark::before {
+  content: "";
+  position: absolute;
+  inset: 0;
+  border-radius: 50%;
+  background: conic-gradient(from 0deg,#54c4ff,#0e639c,#54c4ff);
+  animation: spinRing 6s linear infinite;
+  -webkit-mask: radial-gradient(circle at center, transparent 48%, #000 52%);
+  mask: radial-gradient(circle at center, transparent 48%, #000 52%);
+}
+
+.mark-core {
+  width: 46%;
+  height: 46%;
+  background: radial-gradient(circle at 35% 35%,#7fd8ff,#1987c6 70%);
+  border-radius: 50%;
+  animation: pulseCore 3.4s ease-in-out infinite;
+  box-shadow: 0 0 6px 1px rgba(84,196,255,.55);
+  position: relative;
+}
+
+@keyframes spinRing {
+  0% { transform: rotate(0deg); }
+  100% { transform: rotate(360deg); }
+}
+
+@keyframes pulseCore {
+  0%,100% { transform: scale(1); opacity: 1; }
+  50% { transform: scale(.6); opacity: .65; }
+}
+
+.app-branding h1 {
+  margin: 0;
+  font-size: 1.35rem;
+  font-weight: 600;
+  letter-spacing: .5px;
+  background: linear-gradient(90deg,#5fb4ff,#a6d7ff);
+  -webkit-background-clip: text;
+  background-clip: text;
+  color: transparent;
+}
+
+/* Ensure user info controls vertically center within fixed header */
+.user-info span, .logout-btn {
+  line-height: 1;
+}
+
+/* Normalize button height inside header */
+.logout-btn {
+  height: 36px;
+  display: inline-flex;
+  align-items: center;
+}
+
+
+.App-header h1 { /* legacy selector fallback if used elsewhere */
+  margin: 0;
+}
+
+.user-info {
+  display: flex;
+  align-items: center;
+  gap: 1rem;
+}
+
+.user-info span {
+  color: #cccccc;
+}
+
+.logout-btn {
+  background-color: #dc3545;
+  color: white;
+  border: none;
+  padding: 0.5rem 1rem;
+  border-radius: 4px;
+  cursor: pointer;
+  font-size: 0.9rem;
+  transition: background-color 0.2s;
+}
+
+.logout-btn:hover {
+  background-color: #c82333;
+}
+
+.terminal-btn {
+  background-color: #28a745;
+  color: white;
+  border: none;
+  padding: 0.5rem 1rem;
+  border-radius: 4px;
+  cursor: pointer;
+  font-size: 0.9rem;
+  transition: background-color 0.2s;
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+}
+
+.terminal-btn:hover {
+  background-color: #218838;
+}
+
+.App-main {
+  flex: 1;
+  padding: 1rem;
+  display: flex;
+  flex-direction: column;
+  align-items: stretch;
+  gap: 1rem;
+}
+
+.editor-container {
+  display: flex;
+  flex-direction: row;
+  gap: 1rem;
+  width: 100%;
+  height: calc(100vh - 160px);
+  flex: 1;
+  position: relative;
+}
+
+.file-explorer-section {
+  flex: 0 0 280px;
+  min-width: 200px;
+  max-width: 400px;
+}
+
+.code-section {
+  background-color: #252526;
+  border-radius: 8px;
+  padding: 1rem;
+  border: 1px solid #3e3e42;
+  flex: 1;
+  min-width: 0;
+}
+
+.terminal-section {
+  flex: 1;
+  min-width: 0;
+}
+
+.terminal-section.minimized {
+  flex: 0 0 0 !important;
+  width: 0 !important;
+  max-width: 0 !important;
+  padding: 0 !important;
+  margin: 0 !important;
+  border: 0 !important;
+  overflow: hidden !important;
+}
+
+
+.terminal-fab {
+  position: absolute;
+  left: 8px;
+  bottom: 12px;
+  z-index: 5;
+  background: #0e639c;
+  color: #fff;
+  border: 1px solid #0e639c;
+  border-radius: 999px;
+  width: 40px;
+  height: 40px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  box-shadow: 0 6px 18px rgba(0,0,0,0.35);
+  cursor: pointer;
+
+/* Bootstrapping (session restore) placeholder */
+.bootstrapping-center {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 60vh;
+}
+.bootstrapping-msg {
+  opacity: 0.7;
+  font-size: 0.95rem;
+}
+}
+
+/* Admin login modal styles */
+.admin-login-wrapper {
+  max-width: 400px;
+  margin: 2rem auto;
+  width: 100%;
+}
+
+.admin-login-form {
+  background: #1e1e1e;
+  padding: 1.5rem;
+  border-radius: 8px;
+}
+
+.admin-login-form h2 {
+  margin-top: 0;
+}
+
+.admin-login-form label {
+  display: block;
+  margin-bottom: 6px;
+}
+
+.admin-login-form input[type="password"] {
+  width: 100%;
+  padding: 0.6rem;
+  background: #2a2a2a;
+  border: 1px solid #444;
+  border-radius: 4px;
+  color: #fff;
+  margin-bottom: 0.75rem;
+}
+
+.admin-login-error {
+  color: #ff6b6b;
+  margin-bottom: 0.75rem;
+  font-size: 0.9rem;
+}
+
+.admin-login-actions {
+  display: flex;
+  gap: 0.5rem;
+}
+
+.admin-login-actions button {
+  padding: 0.6rem 1rem;
+  background: #444;
+  color: #fff;
+  border: none;
+  border-radius: 4px;
+  cursor: pointer;
+}
+
+.admin-login-actions button[type="submit"] {
+  flex: 1;
+  background: #2563eb;
+}
+
+.terminal-fab:hover {
+  filter: brightness(1.08);
+}
+
+@media (max-width: 1200px) {
+  .editor-container {
+    max-width: 100%;
+  }
+}

@@ -1,0 +1,37 @@
+# Global ignores for the repository
+
+# OS/filesystem
+.DS_Store
+Thumbs.db
+.vscode/
+.idea/
+
+# Node/React (frontend)
+frontend/node_modules/
+frontend/build/
+# Logs
+frontend/npm-debug.log*
+frontend/yarn-debug.log*
+frontend/yarn-error.log*
+
+# Python (backend)
+backend/__pycache__/
+backend/.pytest_cache/
+backend/*.pyc
+backend/.venv/
+backend/venv/
+backend/.env
+
+# Local DB files
+backend/*.db
+
+# User workspaces (generated at runtime; do NOT commit user code)
+backend/user_code/
+
+# Coverage/Reports
+coverage/
+reports/
+
+# Misc
+*.swp
+*.swo
