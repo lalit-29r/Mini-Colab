@@ -482,7 +482,7 @@
 	display: flex;
 	align-items: center;
 	justify-content: center;
-	z-index: 1200;
+	z-index: 2100;
 }
 
 .modal-dialog {
@@ -494,6 +494,115 @@
 	max-width: 520px;
 	box-shadow: 0 20px 60px -14px rgba(0, 0, 0, .75);
 	animation: fadeIn .25s ease;
+	max-height: 85vh;
+	overflow: auto;
+}
+
+.password-dialog .modal-title {
+	margin-bottom: 1rem;
+}
+
+.password-fields {
+	display: flex;
+	flex-direction: column;
+	gap: .65rem;
+	margin-bottom: .75rem;
+}
+
+.password-label {
+	font-size: .68rem;
+	letter-spacing: .5px;
+	font-weight: 600;
+	color: #9fb0bf;
+}
+
+.password-input {
+	background: #1e252b;
+	border: 1px solid #2d343c;
+	color: #d9e2ea;
+	padding: .5rem .65rem;
+	font-size: .7rem;
+	border-radius: 8px;
+}
+
+.password-input.invalid {
+	border-color: #6b3a3f;
+	box-shadow: 0 0 0 1px rgba(255, 105, 120, .2);
+}
+
+.password-input-wrap {
+	position: relative;
+	display: flex;
+	align-items: center;
+}
+
+.password-input-wrap .password-input {
+	width: 100%;
+	padding-right: 3.1rem;
+}
+
+.password-toggle {
+	position: absolute;
+	right: .4rem;
+	top: 50%;
+	background: transparent;
+	border: none;
+	color: #87b4ff;
+	display: flex;
+	align-items: center;
+	justify-content: center;
+	cursor: pointer;
+	padding: .2rem .35rem;
+	border-radius: 6px;
+	opacity: 0;
+	pointer-events: none;
+	transform: translateY(-50%);
+	transition: opacity .15s, background .15s, transform .15s;
+}
+
+.password-toggle:hover:not(:disabled) {
+	background: rgba(135, 180, 255, .12);
+}
+
+.password-toggle:disabled {
+	opacity: 0;
+	cursor: not-allowed;
+}
+
+.password-input-wrap:hover .password-toggle:disabled {
+	opacity: .4;
+}
+
+.password-input-wrap:hover .password-toggle {
+	opacity: 1;
+	pointer-events: auto;
+}
+
+.password-eye-icon {
+	display: block;
+}
+
+.password-inline-error {
+	font-size: .6rem;
+	color: #ffb3bd;
+	letter-spacing: .4px;
+	margin-top: -.2rem;
+	margin-bottom: .1rem;
+}
+
+.password-hint {
+	font-size: .58rem;
+	color: #8ea0ad;
+	letter-spacing: .45px;
+}
+
+.password-error {
+	background: #402428;
+	border: 1px solid #5a3237;
+	border-radius: 8px;
+	color: #ffc7cf;
+	font-size: .66rem;
+	padding: .5rem .65rem;
 }
 
 .modal-title {

@@ -61,6 +61,8 @@ const FileExplorer: React.FC<FileExplorerProps> = ({
   const fileInputRef = useRef<HTMLInputElement>(null);
   const contextMenuRef = useRef<HTMLDivElement>(null);
   const containerRef = useRef<HTMLDivElement>(null);
+  const creatingItemRef = useRef(creatingItem);
+  const createInFlightRef = useRef(false);
   // Quota usage state
   const [usage, setUsage] = useState<{ usedBytes: number; quotaBytes: number; percent: number } | null>(null);
   const [usageError, setUsageError] = useState<string | null>(null);
@@ -254,7 +256,8 @@ const FileExplorer: React.FC<FileExplorerProps> = ({
   };
 
   const handleNewItem = (type: 'file' | 'folder', parentPath: string = '') => {
-  // Start inline create flow
+    createInFlightRef.current = false;
+    // Start inline create flow
     // If parentPath no longer exists (e.g., was deleted), fallback to root
     const existsFolder = (items: FileItem[], target: string): boolean => {
       for (const it of items) {
@@ -272,12 +275,15 @@ const FileExplorer: React.FC<FileExplorerProps> = ({
   };
 
   const cancelCreate = () => {
+    createInFlightRef.current = false;
     setCreatingItem(null);
   };
 
   const completeCreate = async (name: string) => {
     const creating = creatingItem;
     if (!creating) return;
+    if (createInFlightRef.current) return;
+    createInFlightRef.current = true;
     const trimmed = (name || '').trim().replace(/\\/g, '/');
     if (!trimmed) {
       cancelCreate();
@@ -313,6 +319,27 @@ const FileExplorer: React.FC<FileExplorerProps> = ({
       pushNotice?.({ type: 'error', title: 'Create Failed', message: detail });
     } finally {
       setCreatingItem(null);
+      createInFlightRef.current = false;
+    }
+  };
+
+  useEffect(() => {
+    creatingItemRef.current = creatingItem;
+    if (!creatingItem) {
+      createInFlightRef.current = false;
+    }
+  }, [creatingItem]);
+
+  const handleCreateBlur = (event: React.FocusEvent<HTMLInputElement>) => {
+    if (!creatingItemRef.current) {
+      cancelCreate();
+      return;
+    }
+    const value = event.target.value;
+    if (value.trim()) {
+      completeCreate(value);
+    } else {
+      cancelCreate();
     }
   };
 
@@ -593,7 +620,7 @@ const FileExplorer: React.FC<FileExplorerProps> = ({
                     autoFocus
                     aria-label={`Create ${creatingItem.type}`}
                     placeholder={`New ${creatingItem.type}`}
-                    onBlur={() => cancelCreate()}
+                    onBlur={handleCreateBlur}
                     onKeyDown={(e) => {
                       if (e.key === 'Enter') {
                         const value = (e.target as HTMLInputElement).value;
@@ -778,7 +805,7 @@ const FileExplorer: React.FC<FileExplorerProps> = ({
                 autoFocus
                 aria-label={`Create ${creatingItem.type}`}
                 placeholder={`New ${creatingItem.type}`}
-                onBlur={() => cancelCreate()}
+                onBlur={handleCreateBlur}
                 onKeyDown={(e) => {
                   if (e.key === 'Enter') {
                     const value = (e.target as HTMLInputElement).value;

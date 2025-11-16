@@ -1,10 +1,15 @@
 // AdminDashboard: real-time container + job view via WS, with quota edit & process kill.
-import React, { useEffect, useMemo, useRef, useState } from 'react';
+import React, { MutableRefObject, useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import './AdminDashboard.css';
+// Ensure adm-* layout (scroll, users panel, table) styles are available
+// These classes are defined in Notifications.css and used by AdminDashboard
+import './Notifications.css';
 import ConfirmDialog from './ConfirmDialog';
 import QuotaEditorDialog from './QuotaEditorDialog';
 import AdminStatCard from './AdminStatCard';
+import AdminPasswordDialog from './AdminPasswordDialog';
 import { apiService } from '../services/api';
+import type { Notice } from './Notifications';
 
 interface AdminStatsOverall {
   containers: number;
@@ -42,7 +47,9 @@ interface AdminStatsResponse {
 
 interface AdminDashboardProps {
   token: string;
-  onLogout: () => void;
+  changePasswordTrigger?: MutableRefObject<(() => void) | null>;
+  onPasswordBusyChange?: (busy: boolean) => void;
+  pushNotice?: (notice: Omit<Notice, 'id'>) => void;
 }
 
 type SortKey = 'username' | 'cpu' | 'mem' | 'storage' | 'status';
@@ -91,9 +98,8 @@ const mergeStats = (prev: AdminStatsResponse | null, next: AdminStatsResponse): 
   return { overall: mergedOverall, users: mergedUsers };
 };
 
-const AdminDashboard: React.FC<AdminDashboardProps> = ({ token, onLogout }) => {
+const AdminDashboard: React.FC<AdminDashboardProps> = ({ token, changePasswordTrigger, onPasswordBusyChange, pushNotice }) => {
   const [stats, setStats] = useState<AdminStatsResponse | null>(null);
-  const [error, setError] = useState('');
   const [expanded, setExpanded] = useState<string | null>(null);
   const [busyUser, setBusyUser] = useState<string>('');
   const [confirmUser, setConfirmUser] = useState<string | null>(null);
@@ -112,15 +118,52 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({ token, onLogout }) => {
   const [jobKillOpen, setJobKillOpen] = useState(false);
   const [killingJobs, setKillingJobs] = useState<Set<string>>(new Set());
   const lastStatsRef = useRef<AdminStatsResponse | null>(null);
+  const [isMobile, setIsMobile] = useState<boolean>(false);
+  const tableWrapRef = useRef<HTMLDivElement | null>(null);
+  const rowRefs = useRef<Map<string, HTMLTableRowElement>>(new Map());
+  const [passwordOpen, setPasswordOpen] = useState(false);
+  const [passwordBusy, setPasswordBusy] = useState(false);
+  const [passwordError, setPasswordError] = useState('');
+
+  const refreshTableSizing = useCallback(() => {
+    const wrap = tableWrapRef.current;
+    if (!wrap) return;
+    if (isMobile) {
+      if (wrap.style.maxHeight || wrap.style.overflowY) {
+        wrap.style.maxHeight = '';
+        wrap.style.overflowY = '';
+      }
+      return;
+    }
+
+    const rect = wrap.getBoundingClientRect();
+    const bottomPadding = 16;
+    const available = Math.max(220, window.innerHeight - rect.top - bottomPadding);
+    const contentHeight = wrap.scrollHeight;
+    const targetMax = `${available}px`;
+    if (wrap.style.maxHeight !== targetMax) wrap.style.maxHeight = targetMax;
+    const desiredOverflow = contentHeight > available ? 'auto' : 'visible';
+    if (wrap.style.overflowY !== desiredOverflow) wrap.style.overflowY = desiredOverflow;
+  }, [isMobile]);
+
+  // Derive WS base dynamically to support localhost and LAN/HTTPS links
+  const loc = window.location;
+  const isHttps = loc.protocol === 'https:';
+  const defaultHost = loc.hostname;
+  const defaultApiPort = (process.env.REACT_APP_API_PORT as string) || '8000';
+  const resolvedHost = (process.env.REACT_APP_API_HOST as string) || defaultHost;
+  const WS_BASE_URL = (process.env.REACT_APP_WS_BASE_URL && process.env.REACT_APP_WS_BASE_URL.trim().length > 0)
+    ? (process.env.REACT_APP_WS_BASE_URL as string)
+    : `${isHttps ? 'wss' : 'ws'}://${resolvedHost}:${(process.env.REACT_APP_API_PORT as string) || defaultApiPort}`;
 
   // Stats & jobs websocket
   useEffect(() => {
     let cancelled = false;
     const connect = () => {
       if (cancelled) return;
-      const ws = new WebSocket(`ws://localhost:8000/admin/ws/stats?token=${encodeURIComponent(token)}`);
+      const ws = new WebSocket(`${WS_BASE_URL}/admin/ws/stats?token=${encodeURIComponent(token)}`);
       wsRef.current = ws;
-      ws.onopen = () => { reconnectAttempts.current = 0; setError(''); };
+      ws.onopen = () => { reconnectAttempts.current = 0; };
       ws.onmessage = ev => {
         try {
           const parsed: AdminStatsResponse = JSON.parse(ev.data);
@@ -163,7 +206,18 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({ token, onLogout }) => {
     };
     connect();
     return () => { cancelled = true; try { wsRef.current?.close(); } catch {/* noop */} };
-  }, [token]);
+  }, [token, WS_BASE_URL]);
+
+  // Responsive detection
+  useEffect(() => {
+    const onResize = () => setIsMobile(window.innerWidth <= 760);
+    onResize();
+    window.addEventListener('resize', onResize);
+    return () => window.removeEventListener('resize', onResize);
+  }, []);
+
+  // Keep users panel height bounded to viewport while sizing to content
+  // Observe layout shifts via ResizeObserver triggers loops on some browsers when we mutate styles.
 
   // Collapse panel if its user disappears
   useEffect(() => {
@@ -196,6 +250,26 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({ token, onLogout }) => {
     return sorted;
   }, [stats, filter, sortKey, sortDir]);
 
+  useEffect(() => {
+    const raf = requestAnimationFrame(() => refreshTableSizing());
+    return () => cancelAnimationFrame(raf);
+  }, [refreshTableSizing, filteredUsers.length, expanded]);
+
+  useEffect(() => {
+    if (isMobile) {
+      refreshTableSizing();
+      return;
+    }
+    const handleResize = () => refreshTableSizing();
+    refreshTableSizing();
+    window.addEventListener('resize', handleResize);
+    window.addEventListener('orientationchange', handleResize as any);
+    return () => {
+      window.removeEventListener('resize', handleResize);
+      window.removeEventListener('orientationchange', handleResize as any);
+    };
+  }, [refreshTableSizing, isMobile]);
+
   const toggleSort = (k: SortKey) => {
     if (k === sortKey) {
       setSortDir(d => d === 1 ? -1 : 1);
@@ -204,11 +278,107 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({ token, onLogout }) => {
     }
   };
 
+  const openPasswordDialog = useCallback(() => {
+    setPasswordError('');
+    setPasswordOpen(true);
+  }, []);
+
+  useEffect(() => {
+    if (!changePasswordTrigger) return;
+    changePasswordTrigger.current = openPasswordDialog;
+    return () => {
+      if (changePasswordTrigger.current === openPasswordDialog) {
+        changePasswordTrigger.current = null;
+      }
+    };
+  }, [changePasswordTrigger, openPasswordDialog]);
+
+  useEffect(() => {
+    onPasswordBusyChange?.(passwordBusy);
+  }, [passwordBusy, onPasswordBusyChange]);
+
+  useEffect(() => {
+    return () => {
+      onPasswordBusyChange?.(false);
+    };
+  }, [onPasswordBusyChange]);
+
+  const handlePasswordUpdate = async (currentPwd: string, nextPwd: string) => {
+    setPasswordBusy(true);
+    setPasswordError('');
+    try {
+      await apiService.adminChangePassword(token, currentPwd, nextPwd);
+      pushNotice?.({
+        type: 'success',
+        title: 'Password Updated',
+        message: 'Admin password updated successfully.',
+        ttlMs: 4000,
+      });
+      setPasswordOpen(false);
+    } catch (e: any) {
+      const message = e?.response?.data?.detail || e.message || 'Password update failed';
+      setPasswordError(message);
+    } finally {
+      setPasswordBusy(false);
+    }
+  };
+
+  const scrollDetailIntoView = useCallback((uname: string) => {
+    try {
+      const scroller = tableWrapRef.current as HTMLElement | null;
+      const mainRow = rowRefs.current.get(uname) || null;
+      const detail = document.getElementById(`detail-${uname}`) as HTMLElement | null;
+      if (!scroller || !mainRow) return;
+      const sRect = scroller.getBoundingClientRect();
+      const currentTop = scroller.scrollTop;
+      const mainRect = mainRow.getBoundingClientRect();
+      const headerEl = scroller.querySelector('thead');
+      const headerHeight = headerEl instanceof HTMLElement ? headerEl.offsetHeight : 0;
+      const mainTop = mainRect.top - sRect.top + currentTop;
+      const mainBottom = mainRect.bottom - sRect.top + currentTop;
+      const viewTop = currentTop;
+      const headerGap = 8;
+      let targetTop = viewTop;
+
+      const ensureTopClearance = () => {
+        if (mainTop - targetTop < headerHeight + headerGap) {
+          targetTop = Math.max(0, mainTop - headerHeight - headerGap);
+        }
+      };
+
+      ensureTopClearance();
+
+      const detailBottom = detail
+        ? detail.getBoundingClientRect().bottom - sRect.top + currentTop
+        : mainBottom;
+
+      if (detailBottom - targetTop > scroller.clientHeight) {
+        targetTop = Math.max(0, detailBottom - scroller.clientHeight + headerGap);
+      }
+
+      ensureTopClearance();
+
+      if (Math.abs(targetTop - currentTop) > 1) {
+        scroller.scrollTo({ top: targetTop, behavior: 'smooth' });
+      }
+    } catch {}
+  }, []);
+
   const requestStopUser = (username: string) => { setConfirmUser(username); setConfirmOpen(true); };
   const cancelStop = () => { setConfirmOpen(false); setTimeout(() => setConfirmUser(null), 150); };
   const confirmStop = async () => {
     if (!confirmUser) return; setConfirmOpen(false); const target = confirmUser; setBusyUser(target);
-    try { await apiService.adminStopUser(token, target); if (expanded === target) setExpanded(null); } catch (e:any) { setError(e?.response?.data?.detail || e.message || 'Stop failed'); }
+    try {
+      await apiService.adminStopUser(token, target);
+      if (expanded === target) setExpanded(null);
+    } catch (e:any) {
+      const message = e?.response?.data?.detail || e.message || 'Stop failed';
+      if (pushNotice) {
+        pushNotice({ type: 'error', title: 'Stop Failed', message });
+      } else {
+        console.error(message);
+      }
+    }
     finally { setBusyUser(''); setConfirmUser(null); }
   };
 
@@ -216,8 +386,19 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({ token, onLogout }) => {
 
   const saveQuota = async (mb: number) => {
     if (!quotaUser) return; setQuotaBusy(true);
-    try { await apiService.adminSetQuota(token, quotaUser, mb); setQuotaOpen(false); setQuotaUser(null); }
-    catch (e:any) { setError(e?.response?.data?.detail || e.message || 'Quota update failed'); }
+    try {
+      await apiService.adminSetQuota(token, quotaUser, mb);
+      setQuotaOpen(false);
+      setQuotaUser(null);
+    }
+    catch (e:any) {
+      const message = e?.response?.data?.detail || e.message || 'Quota update failed';
+      if (pushNotice) {
+        pushNotice({ type: 'error', title: 'Quota Update Failed', message });
+      } else {
+        console.error(message);
+      }
+    }
     finally { setQuotaBusy(false); }
   };
 
@@ -240,7 +421,12 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({ token, onLogout }) => {
       .catch((e:any) => {
         // On error, remove killing flag (process still present) and show error
         setKillingJobs(prev => { const n = new Set(prev); n.delete(key); return n; });
-        setError(e?.response?.data?.detail || e.message || 'Kill failed');
+        const message = e?.response?.data?.detail || e.message || 'Kill failed';
+        if (pushNotice) {
+          pushNotice({ type: 'error', title: 'Kill Failed', message });
+        } else {
+          console.error(message);
+        }
       });
   };
 
@@ -249,11 +435,16 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({ token, onLogout }) => {
     const avgCpu = stats.overall.containers > 0 ? (stats.overall.total_cpu_percent / stats.overall.containers) : 0;
     const totalMem = stats.overall.total_mem_usage; // bytes
     return (
-      <div className="adm-metrics">
-        <AdminStatCard label="Active Containers" value={stats.overall.containers} accent="green" />
-        <AdminStatCard label="Total CPU" value={stats.overall.total_cpu_percent.toFixed(2)+'%'} subLabel={avgCpu.toFixed(2)+'% avg'} accent="blue" />
-        <AdminStatCard label="Mem Used" value={formatBytes(totalMem)} subLabel={stats.overall.total_mem_percent.toFixed(1)+'%'} accent="purple" />
-        <AdminStatCard label="Users" value={stats.users.length} accent="orange" />
+      <div className="adm-stats-panel" role="region" aria-label="Server statistics">
+        <div className="adm-users-header adm-stats-header">
+          <h2 className="adm-users-title">Server Stats</h2>
+        </div>
+        <div className="adm-metrics">
+          <AdminStatCard label="Active Containers" value={stats.overall.containers} accent="green" />
+          <AdminStatCard label="Total CPU" value={stats.overall.total_cpu_percent.toFixed(2)+'%'} subLabel={avgCpu.toFixed(2)+'% avg'} accent="blue" />
+          <AdminStatCard label="Mem Used" value={formatBytes(totalMem)} subLabel={stats.overall.total_mem_percent.toFixed(1)+'%'} accent="purple" />
+          <AdminStatCard label="Users" value={stats.users.length} accent="orange" />
+        </div>
       </div>
     );
   }, [stats]);
@@ -272,6 +463,11 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({ token, onLogout }) => {
     if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); setExpanded(isExpanded ? null : uname); }
     if (e.key === 'ArrowRight' && !isExpanded) { setExpanded(uname); }
     if (e.key === 'ArrowLeft' && isExpanded) { setExpanded(null); }
+    // After expanding via keyboard on mobile, nudge into view
+    setTimeout(() => {
+      refreshTableSizing();
+      if (!isExpanded) scrollDetailIntoView(uname);
+    }, 50);
   };
 
   const renderJobs = (u: AdminUserRow) => {
@@ -314,42 +510,81 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({ token, onLogout }) => {
     );
   };
 
-  return (
-    <div className="adm-root">
-      <div className="adm-header">
-        <h1 className="adm-title">Admin Control Center</h1>
-        <div className="adm-actions">
-          <button className="adm-btn danger" onClick={onLogout}>Logout</button>
+  const renderDetailSurface = (u: AdminUserRow, options?: { includeStatus?: boolean }) => {
+    const includeStatus = options?.includeStatus ?? true;
+    return (
+      <div className="adm-detail-surface center-meta" role="group" aria-label="User detail and actions">
+        {/* Stats grid for quick overview */}
+        <div className="adm-detail-grid-refined">
+          {includeStatus && (
+            <div className="adm-detail-block">
+              <label>Status</label>
+              <span>{u.status}</span>
+            </div>
+          )}
+          <div className="adm-detail-block">
+          <label>CPU</label>
+          <span>{u.cpu_percent.toFixed(2)}%</span>
+        </div>
+        <div className="adm-detail-block">
+          <label>Memory</label>
+          <span>{u.mem_percent.toFixed(1)}% ({formatBytes(u.mem_usage)})</span>
+        </div>
+        <div className="adm-detail-block">
+          <label>Storage</label>
+          <span>{renderStorageText(u)}</span>
         </div>
       </div>
-  {error && <div className="adm-error">{error}</div>}
+
+      <div className="adm-detail-divider" />
+
+      <div className="adm-detail-meta-block">
+        <span className="adm-detail-label center">Container ID</span>
+        <code className="adm-detail-code center" title={u.container_id}>{u.container_id}</code>
+      </div>
+      <div className="adm-detail-actions-upgraded">
+          <button type="button" className="adm-btn quota elevated" onClick={()=>openQuota(u.username)}>Edit Storage Quota</button>
+        <button type="button" className="adm-btn danger elevated" disabled={busyUser===u.username} onClick={()=>requestStopUser(u.username)}>{busyUser===u.username?'Working...':'Stop & Delete'}</button>
+      </div>
+      <div className="adm-jobs-section">
+        <h3 className="adm-jobs-title">Jobs</h3>
+        {renderJobs(u)}
+      </div>
+    </div>
+    );
+  };
+
+  return (
+    <div className="adm-root">
       <div className="adm-scroll">
         {overallCards}
         <div className="adm-users-panel">
           <div className="adm-users-header">
             <h2 className="adm-users-title">Users</h2>
-            <div className="adm-filter-wrap">
-              <div className="adm-filter-box">
-                <input
-                  type="text"
-                  placeholder="Search user..."
-                  value={filter}
-                  aria-label="Filter users by username"
-                  onChange={e => setFilter(e.target.value)}
-                  className="adm-filter"
-                />
-                {filter && (
-                  <button
-                    type="button"
-                    aria-label="Clear search"
-                    className="adm-filter-clear"
-                    onClick={() => setFilter('')}
-                  >✕</button>
-                )}
+            <div className="adm-users-controls">
+              <div className="adm-filter-wrap">
+                <div className="adm-filter-box">
+                  <input
+                    type="text"
+                    placeholder="Search user..."
+                    value={filter}
+                    aria-label="Filter users by username"
+                    onChange={e => setFilter(e.target.value)}
+                    className="adm-filter"
+                  />
+                  {filter && (
+                    <button
+                      type="button"
+                      aria-label="Clear search"
+                      className="adm-filter-clear"
+                      onClick={() => setFilter('')}
+                    >✕</button>
+                  )}
+                </div>
               </div>
             </div>
           </div>
-          <div className="adm-table-wrap" role="region" aria-label="User statistics table">
+          <div className="adm-table-wrap" role="region" aria-label="User statistics table" ref={tableWrapRef}>
             <table className="adm-table">
               <thead>
                 <tr>
@@ -368,13 +603,44 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({ token, onLogout }) => {
                       <tr
                         className={`adm-row-main ${isExpanded ? 'expanded' : ''}`}
                         tabIndex={0}
+                        ref={el => {
+                          const map = rowRefs.current;
+                          if (!el) {
+                            map.delete(u.username);
+                          } else {
+                            map.set(u.username, el);
+                          }
+                        }}
                         onKeyDown={e => onKeyRow(e,u.username,isExpanded)}
-                        onClick={() => setExpanded(isExpanded?null:u.username)}
+                        onClick={() => {
+                          const willExpand = !isExpanded;
+                          setExpanded(willExpand ? u.username : null);
+                          if (willExpand) {
+                            setTimeout(() => {
+                              refreshTableSizing();
+                              scrollDetailIntoView(u.username);
+                            }, 50);
+                          } else {
+                            setTimeout(() => refreshTableSizing(), 50);
+                          }
+                        }}
                       >
                         <td className="adm-user-cell">
                           <button
                             type="button"
-                            onClick={(e)=>{ e.stopPropagation(); setExpanded(isExpanded?null:u.username); }}
+                            onClick={(e)=>{
+                              e.stopPropagation();
+                              const willExpand = !isExpanded;
+                              setExpanded(willExpand?u.username:null);
+                              if (willExpand) {
+                                setTimeout(()=>{
+                                  refreshTableSizing();
+                                  scrollDetailIntoView(u.username);
+                                },50);
+                              } else {
+                                setTimeout(() => refreshTableSizing(), 50);
+                              }
+                            }}
                             className="adm-user-btn"
                           >
                             <span className={`adm-caret ${isExpanded ? 'rot':''}`}>▶</span>
@@ -386,23 +652,10 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({ token, onLogout }) => {
                         <td>{u.mem_percent.toFixed(1)}% ({formatBytes(u.mem_usage)})</td>
                         <td>{renderStorageText(u)}</td>
                       </tr>
-                      {isExpanded && (
+                      {isExpanded && !isMobile && (
                         <tr className="adm-detail-row" id={`detail-${u.username}`}> 
                           <td colSpan={5}>
-                            <div className="adm-detail-surface center-meta" role="group" aria-label="User detail and actions">
-                              <div className="adm-detail-meta-block">
-                                <span className="adm-detail-label center">Container ID</span>
-                                <code className="adm-detail-code center" title={u.container_id}>{u.container_id}</code>
-                              </div>
-                              <div className="adm-detail-actions-upgraded">
-                                  <button type="button" className="adm-btn quota elevated" onClick={()=>openQuota(u.username)}>Edit Storage Quota</button>
-                                <button type="button" className="adm-btn danger elevated" disabled={busyUser===u.username} onClick={()=>requestStopUser(u.username)}>{busyUser===u.username?'Working...':'Stop & Delete'}</button>
-                              </div>
-                              <div className="adm-jobs-section">
-                                <h3 className="adm-jobs-title">Jobs</h3>
-                                {renderJobs(u)}
-                              </div>
-                            </div>
+                            {renderDetailSurface(u)}
                           </td>
                         </tr>
                       )}
@@ -415,6 +668,34 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({ token, onLogout }) => {
               </tbody>
             </table>
           </div>
+          {/* Mobile bottom sheet for expanded user */}
+          {isMobile && expanded && (
+            (() => {
+              const u = stats?.users.find(x => x.username === expanded);
+              if (!u) return null;
+              return (
+                <div className="adm-detail-sheet-overlay" role="dialog" aria-modal="true" aria-label={`Details for ${u.username}`} onClick={() => setExpanded(null)}>
+                  <div className="adm-detail-sheet" onClick={(e)=>e.stopPropagation()}>
+                    <div className="adm-sheet-grabber" aria-hidden="true" />
+                    <div className="adm-sheet-header">
+                      <div className="adm-sheet-title">
+                        <span>{u.username}</span>
+                        <span
+                          className={`adm-sheet-status-dot ${u.status?.toLowerCase() === 'running' ? 'up' : 'down'}`}
+                          aria-hidden="true"
+                        />
+                        <span className="sr-only">Status: {u.status}</span>
+                      </div>
+                      <button className="adm-sheet-close" aria-label="Close" onClick={() => setExpanded(null)}>✕</button>
+                    </div>
+                    <div className="adm-sheet-body">
+                      {renderDetailSurface(u, { includeStatus: false })}
+                    </div>
+                  </div>
+                </div>
+              );
+            })()
+          )}
         </div>
       </div>
       <ConfirmDialog
@@ -445,6 +726,17 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({ token, onLogout }) => {
         destructive
         onConfirm={confirmKillJob}
         onCancel={cancelKillJob}
+      />
+      <AdminPasswordDialog
+        open={passwordOpen}
+        busy={passwordBusy}
+        onClose={() => {
+          if (passwordBusy) return;
+          setPasswordError('');
+          setPasswordOpen(false);
+        }}
+        onSubmit={handlePasswordUpdate}
+        serverError={passwordError}
       />
     </div>
   );

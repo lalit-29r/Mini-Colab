@@ -8,6 +8,7 @@ import ImageSelection from './components/ImageSelection';
 import CodeEditor from './components/CodeEditor';
 import Terminal from './components/Terminal';
 import FileExplorer from './components/FileExplorer';
+import ActivityBar from './components/ActivityBar';
 import { apiService } from './services/api';
 import ConfirmDialog from './components/ConfirmDialog';
 import Notifications, { Notice } from './components/Notifications';
@@ -41,6 +42,9 @@ function App() {
   const [confirmLogoutOpen, setConfirmLogoutOpen] = useState<boolean>(false);
   const [terminalMinimized, setTerminalMinimized] = useState<boolean>(true); // start hidden
   const [terminalActivated, setTerminalActivated] = useState<boolean>(false); // Lazy mount flag
+  const [explorerCollapsed, setExplorerCollapsed] = useState<boolean>(false);
+  const [activeActivity, setActiveActivity] = useState<'explorer'>('explorer');
+  const [isMobile, setIsMobile] = useState<boolean>(false);
   const restoreTerminal = () => {
     setTerminalMinimized(false);
     // Let layout settle then trigger a resize so Monaco/xterm can refit
@@ -55,6 +59,8 @@ function App() {
   const [adminAuthError, setAdminAuthError] = useState<string>('');
   const [adminLoginLoading, setAdminLoginLoading] = useState<boolean>(false);
   const [confirmAdminLogoutOpen, setConfirmAdminLogoutOpen] = useState<boolean>(false);
+  const changePasswordTriggerRef = React.useRef<(() => void) | null>(null);
+  const [adminPasswordBusy, setAdminPasswordBusy] = useState<boolean>(false);
   const [notices, setNotices] = useState<Notice[]>([]);
   const [bootstrapping, setBootstrapping] = useState<boolean>(true); // hide UI until session restored
 
@@ -122,16 +128,17 @@ function App() {
               try {
                 const auth = await apiService.auth(parsed.username);
                 if (!cancelled) {
-                  if (auth.has_container && auth.container_id) {
-                    const u: User = { username: auth.username, containerID: auth.container_id };
+                  const hasContainer = Boolean(auth.has_container && auth.container_id);
+                  if (hasContainer) {
+                    const u: User = { username: auth.username, containerID: auth.container_id! };
                     setUser(u);
                     setStage('workspace');
                     persistUser(u, 'workspace');
                   } else {
-                    const u: User = { username: auth.username };
-                    setUser(u);
-                    setStage('image');
-                    persistUser(u, 'image');
+                    setUser(null);
+                    setPendingUsername('');
+                    setStage('login');
+                    persistUser(null);
                   }
                 }
               } catch {
@@ -225,6 +232,13 @@ function App() {
     setConfirmAdminLogoutOpen(false);
     handleAdminLogout();
   };
+
+  useEffect(() => {
+    if (stage !== 'admin-dashboard') {
+      setAdminPasswordBusy(false);
+      changePasswordTriggerRef.current = null;
+    }
+  }, [stage]);
 
   const doLogout = async () => {
     if (!user) return;
@@ -543,6 +557,62 @@ function App() {
     setTimeout(() => window.dispatchEvent(new Event('resize')), 60);
   };
 
+  const toggleExplorer = () => {
+    setExplorerCollapsed(prev => !prev);
+    // Give layout a tick then notify Monaco/xterm to relayout
+    setTimeout(() => window.dispatchEvent(new Event('resize')), 60);
+  };
+
+  // Responsive breakpoint detection
+  useEffect(() => {
+    const onResize = () => {
+      const mobile = window.innerWidth <= 900;
+      setIsMobile(mobile);
+    };
+    onResize();
+    window.addEventListener('resize', onResize);
+    return () => window.removeEventListener('resize', onResize);
+  }, []);
+
+  // When terminal opens on mobile, scroll it into view
+  const scrollTerminalIntoView = useCallback(() => {
+    if (!isMobile || !terminalActivated || terminalMinimized) return;
+    const section = document.querySelector('.terminal-section');
+    if (!(section instanceof HTMLElement)) return;
+    try {
+      section.scrollIntoView({ behavior: 'smooth', block: 'start' });
+    } catch {}
+
+    const scrollContainers: HTMLElement[] = [];
+    const workPane = document.querySelector('.work-pane.column');
+    if (workPane instanceof HTMLElement) scrollContainers.push(workPane);
+
+    // Fallback to window for browsers that don't scroll nested containers
+    if (scrollContainers.length === 0) {
+      const docEl = document.scrollingElement as HTMLElement | null;
+      if (docEl) {
+        scrollContainers.push(docEl);
+      } else if (document.body) {
+        scrollContainers.push(document.body);
+      }
+    }
+
+    // Nudge up a little so the header (with actions) remains visible
+    scrollContainers.forEach(container => {
+      setTimeout(() => {
+        try {
+          if (typeof container.scrollBy === 'function') {
+            container.scrollBy({ top: -48, behavior: 'smooth' });
+          }
+        } catch {}
+      }, 200);
+    });
+  }, [isMobile, terminalActivated, terminalMinimized]);
+
+  useEffect(() => {
+    scrollTerminalIntoView();
+  }, [scrollTerminalIntoView]);
+
   if (bootstrapping) {
     return (
       <div className="App">
@@ -573,6 +643,27 @@ function App() {
               Logout
             </button>
           </div>
+        ) : stage === 'admin-dashboard' && adminToken ? (
+          <div className="user-info">
+            <span>Admin</span>
+            <button
+              type="button"
+              onClick={() => changePasswordTriggerRef.current?.()}
+              className="change-password-btn"
+              title="Change password"
+              disabled={adminPasswordBusy}
+            >
+              Change Password
+            </button>
+            <button
+              type="button"
+              onClick={requestAdminLogout}
+              className="logout-btn"
+              title="Logout"
+            >
+              Logout
+            </button>
+          </div>
         ) : null}
       </header>
 
@@ -590,7 +681,12 @@ function App() {
         )}
         {stage === 'admin-dashboard' && adminToken && (
           <div className="admin-dashboard-wrapper">
-            <AdminDashboard token={adminToken} onLogout={requestAdminLogout} />
+            <AdminDashboard
+              token={adminToken}
+              changePasswordTrigger={changePasswordTriggerRef}
+              onPasswordBusyChange={setAdminPasswordBusy}
+              pushNotice={pushNotice}
+            />
           </div>
         )}
         {stage === 'image' && (pendingUsername || user) && (
@@ -601,43 +697,55 @@ function App() {
         )}
         {stage === 'workspace' && user && (
           <div className="editor-container">
-            <div className="file-explorer-section">
-              <FileExplorer 
-                username={user.username}
-                onFileSelect={handleFileSelect}
-                onNewFile={handleNewFile}
-                onFileDeleted={handleFileDeleted}
-                onFileRenamed={handleFileRenamed}
-                currentFilePath={currentFilePath}
-                filesWithUnsavedChanges={filesWithUnsavedChanges}
-                pushNotice={pushNotice}
-              />
+            <ActivityBar
+              active={activeActivity}
+              sidebarVisible={!explorerCollapsed}
+              onSelect={(v) => setActiveActivity(v)}
+              onToggleSidebar={toggleExplorer}
+            />
+            <div className={`file-explorer-section ${explorerCollapsed ? 'collapsed' : ''} ${isMobile ? 'mobile' : ''}`}>
+              {activeActivity === 'explorer' && (
+                <FileExplorer 
+                  username={user.username}
+                  onFileSelect={handleFileSelect}
+                  onNewFile={handleNewFile}
+                  onFileDeleted={handleFileDeleted}
+                  onFileRenamed={handleFileRenamed}
+                  currentFilePath={currentFilePath}
+                  filesWithUnsavedChanges={filesWithUnsavedChanges}
+                  pushNotice={pushNotice}
+                />
+              )}
             </div>
-            <div className="code-section">
-              <CodeEditor 
-                username={user.username}
-                onSaveFile={handleSaveFile}
-                onExecuteCommand={handleExecuteCommand}
-                initialContent={currentFileContent}
-                savedContent={currentFileSavedContent}
-                filename={currentFilename}
-                filePath={currentFilePath}
-                isFileOpen={isFileOpen}
-                onContentChange={handleContentChange}
-                pushNotice={pushNotice}
-                focusRequest={editorFocusRequest}
-                onQuotaExceeded={async () => {
-                  try {
-                    const q = await apiService.quotaUsage(user.username);
-                    pushNotice({
-                      type: 'info',
-                      title: 'Storage Usage',
-                      message: `Using ${(q.used_bytes/1024/1024).toFixed(2)} MB of ${(q.quota_bytes/1024/1024).toFixed(2)} MB (${q.percent_used}% ).`
-                    });
-                  } catch {}
-                }}
-              />
-            </div>
+            {isMobile && !explorerCollapsed && (
+              <div className="overlay-backdrop" onClick={toggleExplorer} />
+            )}
+            <div className={`work-pane ${isMobile ? 'column' : 'row'}`}>
+              <div className="code-section">
+                <CodeEditor 
+                  username={user.username}
+                  onSaveFile={handleSaveFile}
+                  onExecuteCommand={handleExecuteCommand}
+                  initialContent={currentFileContent}
+                  savedContent={currentFileSavedContent}
+                  filename={currentFilename}
+                  filePath={currentFilePath}
+                  isFileOpen={isFileOpen}
+                  onContentChange={handleContentChange}
+                  pushNotice={pushNotice}
+                  focusRequest={editorFocusRequest}
+                  onQuotaExceeded={async () => {
+                    try {
+                      const q = await apiService.quotaUsage(user.username);
+                      pushNotice({
+                        type: 'info',
+                        title: 'Storage Usage',
+                        message: `Using ${(q.used_bytes/1024/1024).toFixed(2)} MB of ${(q.quota_bytes/1024/1024).toFixed(2)} MB (${q.percent_used}% ).`
+                      });
+                    } catch {}
+                  }}
+                />
+              </div>
               {terminalActivated && (
                 <div className={`terminal-section ${terminalMinimized ? 'minimized' : ''}`}>
                   <Terminal 
@@ -650,6 +758,7 @@ function App() {
                   />
                 </div>
               )}
+            </div>
               {/* Floating button used both for first activation and restore */}
               {(!terminalActivated || (terminalActivated && terminalMinimized)) && (
                 <button

@@ -188,12 +188,19 @@
 .file-explorer-actions {
   display: flex;
   gap: 0;
-  opacity: 0;
+  opacity: 1;
   transition: opacity 0.2s ease;
 }
 
-.file-explorer:hover .file-explorer-actions {
-  opacity: 1;
+@media (pointer: fine) {
+  .file-explorer-actions {
+    opacity: 0;
+  }
+
+  .file-explorer:hover .file-explorer-actions,
+  .file-explorer:focus-within .file-explorer-actions {
+    opacity: 1;
+  }
 }
 
 .action-btn {

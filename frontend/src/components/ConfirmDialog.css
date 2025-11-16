@@ -5,17 +5,20 @@
   display: flex;
   align-items: center;
   justify-content: center;
-  z-index: 1000;
+  z-index: 2000;
 }
 
 .confirm-dialog {
   background: #1e1e1e;
   color: #ddd;
-  min-width: 360px;
+  min-width: 0;
+  width: calc(100vw - 32px);
   max-width: 520px;
   border: 1px solid #3c3c3c;
   border-radius: 8px;
   padding: 20px 24px;
+  max-height: 85vh;
+  overflow: auto;
   box-shadow: 0 16px 40px rgba(0,0,0,0.5);
 }
 
@@ -39,6 +42,7 @@
   justify-content: center;
   gap: 12px;
   margin-top: 8px;
+  flex-wrap: wrap;
 }
 
 .btn {
@@ -77,4 +81,21 @@
 .btn:focus-visible {
   outline: none;
   box-shadow: 0 0 0 2px rgba(14, 99, 156, 0.6);
+}
+
+@media (max-width: 480px) {
+  .confirm-dialog {
+    width: calc(100vw - 16px);
+    padding: 16px;
+    border-radius: 10px;
+  }
+  .confirm-title { font-size: 16px; }
+  .confirm-message { font-size: 13px; }
+  .confirm-actions { gap: 8px; }
+  .btn {
+    min-width: 0;
+    width: 100%;
+    padding: 10px 12px;
+    font-size: 14px;
+  }
 }

@@ -1,0 +1,53 @@
+.activity-bar {
+  flex: 0 0 48px;
+  background: #202224;
+  border-right: none;
+  display: inline-flex;
+  flex-direction: column;
+  align-items: center;
+  padding: 8px 0;
+  gap: 6px;
+  align-self: flex-start;
+  height: auto;
+  max-height: calc(100% - 60px);
+  box-sizing: border-box;
+  border-radius: 10px;
+  overflow: hidden;
+  box-shadow: 0 0 0 1px #2d2f31; /* subtle hairline to avoid double-thick seam */
+}
+
+.activity-item {
+  width: 36px;
+  height: 36px;
+  border: 1px solid transparent;
+  border-radius: 6px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  color: #c5c5c5;
+  background: transparent;
+  cursor: pointer;
+}
+
+.activity-item:hover {
+  background: #2a2d2f;
+  color: #ffffff;
+}
+
+.activity-item.active {
+  background: #2a2d2f;
+  border-color: #3a3f44;
+  color: #ffffff;
+}
+
+.activity-item i {
+  font-size: 18px;
+}
+
+.activity-spacer {
+  flex: 1;
+}
+
+.activity-item.settings {
+  opacity: 0.9;
+}

@@ -1,6 +1,11 @@
+:root {
+  --header-h: 64px;
+  --main-pad: 16px;
+}
+
 .App {
   text-align: center;
-  min-height: 100vh;
+  height: 100dvh;
   display: flex;
   flex-direction: column;
   background-color: #1e1e1e;
@@ -9,7 +14,7 @@
 
 .App-header {
   background: linear-gradient(90deg,#2d2d30,#262b31 55%,#242a30);
-  height: 64px; /* fixed consistent height */
+  height: var(--header-h); /* responsive via CSS var */
   padding: 0 1.75rem; /* remove vertical padding, rely on flex centering */
   display: flex;
   justify-content: space-between;
@@ -81,15 +86,22 @@
 }
 
 /* Ensure user info controls vertically center within fixed header */
-.user-info span, .logout-btn {
+.user-info span, .logout-btn, .change-password-btn {
   line-height: 1;
 }
 
 /* Normalize button height inside header */
-.logout-btn {
+.logout-btn, .change-password-btn {
   height: 36px;
   display: inline-flex;
   align-items: center;
+  border: none;
+  padding: 0.5rem 1rem;
+  border-radius: 4px;
+  cursor: pointer;
+  font-size: 0.9rem;
+  transition: background-color 0.2s;
+  color: white;
 }
 
 
@@ -107,19 +119,15 @@
   color: #cccccc;
 }
 
-.logout-btn {
-  background-color: #dc3545;
-  color: white;
-  border: none;
-  padding: 0.5rem 1rem;
-  border-radius: 4px;
-  cursor: pointer;
-  font-size: 0.9rem;
-  transition: background-color 0.2s;
-}
+.logout-btn { background-color: #dc3545; }
+.logout-btn:hover { background-color: #c82333; }
 
-.logout-btn:hover {
-  background-color: #c82333;
+.change-password-btn { background-color: #2563eb; }
+.change-password-btn:hover { background-color: #1d4ed8; }
+.change-password-btn:disabled {
+  background-color: #3b82f6;
+  cursor: not-allowed;
+  opacity: 0.8;
 }
 
 .terminal-btn {
@@ -142,11 +150,12 @@
 
 .App-main {
   flex: 1;
-  padding: 1rem;
+  padding: var(--main-pad);
   display: flex;
   flex-direction: column;
   align-items: stretch;
   gap: 1rem;
+  overflow: hidden; /* prevent children from causing page scroll/white gaps */
 }
 
 .editor-container {
@@ -154,15 +163,71 @@
   flex-direction: row;
   gap: 1rem;
   width: 100%;
-  height: calc(100vh - 160px);
+  height: 100%;
   flex: 1;
   position: relative;
+  min-height: 0;
 }
+
+/* Work pane holds editor and terminal, switches orientation responsively */
+.work-pane {
+  display: flex;
+  flex: 1;
+  min-width: 0;
+  min-height: 0;
+  gap: 12px;
+}
+.work-pane.row { flex-direction: row; }
+.work-pane.column { flex-direction: column; overflow-y: auto; }
 
 .file-explorer-section {
   flex: 0 0 280px;
   min-width: 200px;
   max-width: 400px;
+  border-left: 1px solid #2d2f31; /* separator next to Activity Bar */
+}
+
+.file-explorer-section.collapsed {
+  flex: 0 0 0 !important;
+  width: 0 !important;
+  min-width: 0 !important;
+  max-width: 0 !important;
+  padding: 0 !important;
+  margin: 0 !important;
+  border: 0 !important;
+  overflow: hidden !important;
+}
+
+.explorer-gutter {
+  flex: 0 0 12px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.explorer-toggle {
+  width: 10px;
+  height: 120px;
+  border-radius: 6px;
+  border: 1px solid #3a3a3d;
+  background: linear-gradient(180deg,#2a2a2e,#222226);
+  color: #c9d1d9;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  transition: filter .15s ease, background .15s ease;
+}
+
+.explorer-toggle:hover {
+  filter: brightness(1.08);
+}
+
+.explorer-toggle .chev {
+  font-size: 11px;
+  line-height: 1;
+  -webkit-user-select: none;
+  user-select: none;
 }
 
 .code-section {
@@ -170,23 +235,53 @@
   border-radius: 8px;
   padding: 1rem;
   border: 1px solid #3e3e42;
-  flex: 1;
+  flex: 1 1 0;
   min-width: 0;
 }
 
+
+/* Terminal docking styles */
 .terminal-section {
-  flex: 1;
+  background-color: #1f1f1f;
+  border: 1px solid #3e3e42;
+  border-radius: 8px;
   min-width: 0;
+  min-height: 0;
+  display: flex;
+  overflow: hidden;
+}
+.work-pane.row .terminal-section {
+  flex: 1 1 0; /* match editor for 50/50 like before */
+  max-width: none;
+  min-width: 260px;
+}
+.work-pane.column .terminal-section {
+  flex: 0 0 auto;
+  height: 32vh; /* fixed, scrollable container can reveal it */
+  max-height: 60vh;
+  min-height: 160px;
+}
+.work-pane.row .terminal-section.minimized,
+.work-pane.column .terminal-section.minimized {
+  flex: 0 0 0 !important;
+  width: 0 !important;
+  height: 0 !important;
+  padding: 0 !important;
+  margin: 0 !important;
+  border: 0 !important;
 }
 
 .terminal-section.minimized {
   flex: 0 0 0 !important;
   width: 0 !important;
   max-width: 0 !important;
+  min-width: 0 !important;
+  min-height: 0 !important;
   padding: 0 !important;
   margin: 0 !important;
   border: 0 !important;
   overflow: hidden !important;
+  display: none !important;
 }
 
 
@@ -285,4 +380,46 @@
   .editor-container {
     max-width: 100%;
   }
+}
+
+/* Tablet and below */
+@media (max-width: 900px) {
+  :root { --header-h: 60px; --main-pad: 12px; }
+  .App-main { gap: 12px; }
+  .editor-container { gap: 12px; }
+  .work-pane { gap: 12px; }
+  .code-section { padding: 12px; border-radius: 8px; }
+  .work-pane.column .terminal-section { height: 34vh; }
+  /* Mobile overlay for explorer */
+  .file-explorer-section.mobile {
+    position: absolute;
+    top: 0;
+    bottom: 0;
+    left: 48px; /* next to activity bar */
+    width: min(80vw, 340px);
+    max-width: 90vw;
+    background: #252526;
+    border-left: 1px solid #2d2f31;
+    border-right: 1px solid #2d2f31;
+    box-shadow: 0 12px 32px rgba(0,0,0,0.5);
+    z-index: 9;
+  }
+  .file-explorer-section.mobile.collapsed { display: none !important; }
+  .overlay-backdrop {
+    position: absolute;
+    inset: 0;
+    background: rgba(0,0,0,0.45);
+    z-index: 8;
+  }
+}
+
+/* Phone sizes */
+@media (max-width: 600px) {
+  :root { --header-h: 56px; --main-pad: 8px; }
+  .App-main { gap: 8px; }
+  .editor-container { gap: 8px; }
+  .work-pane { gap: 8px; }
+  .code-section { padding: 8px; border-radius: 6px; }
+  .terminal-fab { left: auto; right: 12px; bottom: 12px; }
+  .work-pane.column .terminal-section { height: 36vh; }
 }

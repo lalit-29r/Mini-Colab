@@ -1,7 +1,20 @@
 import axios from 'axios';
 
-const API_BASE_URL = 'http://localhost:8000';
-const WS_BASE_URL = 'ws://localhost:8000';
+// Derive API/WS base dynamically to work on localhost and network links
+const loc = window.location;
+const isHttps = loc.protocol === 'https:';
+const defaultHost = loc.hostname; // use the same host you open the app on
+const defaultApiPort = process.env.REACT_APP_API_PORT || '8000';
+const resolvedHost = (process.env.REACT_APP_API_HOST || defaultHost).toString();
+
+// Allow full override via env (supports reverse proxy paths like '/api')
+const API_BASE_URL = (process.env.REACT_APP_API_BASE_URL && process.env.REACT_APP_API_BASE_URL.trim().length > 0)
+  ? process.env.REACT_APP_API_BASE_URL
+  : `${isHttps ? 'https' : 'http'}://${resolvedHost}:${process.env.REACT_APP_API_PORT || defaultApiPort}`;
+
+const WS_BASE_URL = (process.env.REACT_APP_WS_BASE_URL && process.env.REACT_APP_WS_BASE_URL.trim().length > 0)
+  ? process.env.REACT_APP_WS_BASE_URL
+  : `${isHttps ? 'wss' : 'ws'}://${resolvedHost}:${process.env.REACT_APP_API_PORT || defaultApiPort}`;
 
 const api = axios.create({
   baseURL: API_BASE_URL,
@@ -298,6 +311,13 @@ export const apiService = {
     formData.append('pid', String(pid));
     formData.append('signal_name', signalName);
     const response = await api.post('/admin/kill-job', formData, { headers: { 'x-admin-token': token } });
+    return response.data;
+  },
+  adminChangePassword: async (token: string, currentPassword: string, newPassword: string): Promise<{ message: string }> => {
+    const formData = new FormData();
+    formData.append('current_password', currentPassword);
+    formData.append('new_password', newPassword);
+    const response = await api.post('/admin/change-password', formData, { headers: { 'x-admin-token': token } });
     return response.data;
   },
 };

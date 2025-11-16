@@ -16,10 +16,12 @@
   --focus: 0 0 0 2px #1d2630, 0 0 0 4px var(--accent-blue);
   font-family: system-ui, -apple-system, Segoe UI, Roboto, Ubuntu, sans-serif;
   color: var(--text);
-  background: radial-gradient(circle at 70% 8%, #1a2027, #101318);
-  min-height: 100vh;
+  /* Use app background; avoid any wrapper panel feel here */
+  background: transparent;
+  height: 100vh; /* lock to viewport */
   display: flex;
   flex-direction: column;
+  overflow: hidden; /* prevent page scroll; delegate to inner panels */
 }
 
 .adm-header {
@@ -28,6 +30,11 @@
   justify-content: space-between;
   padding: 1rem 1.4rem 0.85rem;
   gap: 1rem;
+  position: sticky;
+  top: 0;
+  z-index: 50;
+  background: radial-gradient(circle at 70% 8%, #1a2027, #101318);
+  border-bottom: 1px solid var(--border);
 }
 
 .adm-title {
@@ -87,7 +94,8 @@
   flex-direction: column;
   padding: 0 1.4rem 1.4rem;
   gap: 1.3rem;
-  overflow: auto;
+  /* Do not scroll whole page; only users panel/table can scroll */
+  overflow: hidden;
 }
 
 /* Top metrics grid */
@@ -95,6 +103,25 @@
   display: grid;
   grid-template-columns: repeat(auto-fit, minmax(170px, 1fr));
   gap: 1rem;
+}
+
+/* Server stats as its own panel (sibling to the Users panel) */
+.adm-stats-panel {
+  background: linear-gradient(160deg, var(--panel), var(--panel-alt));
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  padding: 1rem 1.1rem 1.15rem;
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  gap: 1rem;
+  box-shadow: 0 6px 18px -10px rgba(0, 0, 0, .55), 0 0 0 1px rgba(255, 255, 255, 0.03) inset;
+}
+
+.adm-stats-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
 }
 
 .adm-stat-card {
@@ -170,6 +197,8 @@
   flex-direction: column;
   gap: 1rem;
   box-shadow: 0 6px 18px -10px rgba(0, 0, 0, .55), 0 0 0 1px rgba(255, 255, 255, 0.03) inset;
+  /* Size to content; no forced fill */
+  flex: initial;
 }
 
 .adm-users-header {
@@ -187,18 +216,52 @@
   color: var(--text-dim);
 }
 
+.adm-users-controls {
+  display: flex;
+  align-items: center;
+  gap: .75rem;
+  flex-wrap: wrap;
+}
+
 .adm-table-wrap {
   border: 1px solid var(--border);
   border-radius: 14px;
-  overflow: hidden;
+  /* Avoid clipping expanded detail panel on small screens */
+  overflow-x: auto;
+  overflow-y: auto; /* users table owns the scroll */
   background: #1a2026;
   box-shadow: 0 4px 12px -6px rgba(0, 0, 0, .5) inset;
+  /* Size to content by default; capped by dynamic max-height */
+  flex: initial;
+  max-height: 60vh; /* fallback cap; overwritten dynamically */
+}
+
+/* Users panel scrollbar styling */
+.adm-table-wrap::-webkit-scrollbar { width: 10px; }
+.adm-table-wrap::-webkit-scrollbar-track { background: #151a1f; border-radius: 8px; }
+.adm-table-wrap::-webkit-scrollbar-thumb { background: #2c3540; border-radius: 8px; border: 2px solid #151a1f; }
+.adm-table-wrap::-webkit-scrollbar-thumb:hover { background: #35414d; }
+
+/* Progressive enhancement for Firefox */
+@supports (scrollbar-width: thin) {
+  .adm-table-wrap { scrollbar-width: thin; scrollbar-color: #2c3540 #151a1f; }
+}
+
+/* Progressive enhancement for scroll behavior containment */
+@supports (overscroll-behavior: contain) {
+  .adm-scroll { overscroll-behavior: none; }
+  .adm-table-wrap { overscroll-behavior: contain; }
+}
+
+/* Progressive enhancement for stable scrollbar gutter */
+@supports (scrollbar-gutter: stable) {
+  .adm-table-wrap { scrollbar-gutter: stable both-edges; }
 }
 
 .adm-table {
-  width: 100%;
-  border-collapse: separate;
-  border-spacing: 0;
+  width: calc(100% + 1.2rem);
+  margin: 0 -0.6rem;
+  border-collapse: collapse; /* eliminate inner gaps so rows meet wrapper border */
   font-size: .68rem;
 }
 
@@ -212,12 +275,20 @@
   padding: .55rem .7rem;
   position: sticky;
   top: 0;
+  z-index: 5; /* ensure header stays above expanded detail surface */
+  box-shadow: 0 1px 0 0 #242c33 inset, 0 2px 6px rgba(0,0,0,.25);
 }
 
 .adm-table tbody td {
   padding: .55rem .7rem;
   border-top: 1px solid #242c33;
 }
+
+/* Tighten side padding so row background meets wrapper border more closely */
+.adm-table thead th:first-child,
+.adm-table tbody td:first-child { padding-left: .5rem; }
+.adm-table thead th:last-child,
+.adm-table tbody td:last-child { padding-right: .5rem; }
 
 .adm-table tbody tr:first-child td {
   border-top: none;
@@ -675,6 +746,16 @@
   color: #ffc7cf;
 }
 
+.adm-status-banner {
+  margin: 0 1.4rem 0;
+  padding: .65rem .8rem;
+  background: #1f2d26;
+  border: 1px solid #2e4338;
+  border-radius: 10px;
+  font-size: .68rem;
+  color: #c1f2d3;
+}
+
 .adm-filter-wrap {
   display: flex;
   gap: .6rem;
@@ -959,10 +1040,113 @@
   animation: fadeSlideIn .4s ease;
 }
 
+/* -------------------------------------------------- */
+/* Mobile bottom sheet for expanded user details       */
+/* -------------------------------------------------- */
+.adm-detail-sheet-overlay {
+  position: fixed;
+  inset: 0;
+  background: rgba(0,0,0,.45);
+  display: flex;
+  align-items: flex-end;
+  justify-content: center;
+  z-index: 1200;
+}
+
+.adm-detail-sheet {
+  width: 100%;
+  max-width: 680px;
+  background: linear-gradient(160deg, var(--panel), var(--panel-alt));
+  border-top-left-radius: 16px;
+  border-top-right-radius: 16px;
+  border: 1px solid var(--border);
+  border-bottom: none;
+  box-shadow: 0 -10px 30px -12px rgba(0,0,0,.6), 0 0 0 1px rgba(255,255,255,.03) inset;
+  overflow: hidden;
+  max-height: 82vh;
+}
+
+.adm-sheet-grabber {
+  width: 40px;
+  height: 4px;
+  border-radius: 999px;
+  background: #3a4450;
+  opacity: .9;
+  margin: 8px auto 4px;
+}
+
+.adm-sheet-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: .5rem .7rem .4rem;
+  border-bottom: 1px solid var(--border);
+}
+
+.adm-sheet-title {
+  font-size: .9rem;
+  font-weight: 600;
+  letter-spacing: .5px;
+  display: inline-flex;
+  align-items: center;
+  gap: .45rem;
+}
+
+.adm-sheet-status-dot {
+  width: 10px;
+  height: 10px;
+  border-radius: 50%;
+  box-shadow: 0 0 6px rgba(35, 193, 134, 0.6);
+}
+
+.adm-sheet-status-dot.up {
+  background: #23c186;
+  box-shadow: 0 0 6px rgba(35, 193, 134, 0.6);
+}
+
+.adm-sheet-status-dot.down {
+  background: #ff5e5e;
+  box-shadow: 0 0 6px rgba(255, 94, 94, 0.55);
+}
+
+.adm-sheet-close {
+  background: #252c33;
+  border: 1px solid #313a44;
+  color: #d7e2eb;
+  width: 28px;
+  height: 28px;
+  border-radius: 8px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+}
+
+.adm-sheet-close:hover { background: #2b333b; }
+
+.adm-sheet-body {
+  overflow: auto;
+  max-height: calc(82vh - 48px);
+  padding: .6rem .6rem calc(10px + env(safe-area-inset-bottom));
+}
+
+@media (min-width:761px) {
+  .adm-detail-sheet-overlay { display: none; }
+}
+
 /* Responsive tweaks */
 @media (max-width:760px) {
+  .adm-root {
+    height: auto;
+    min-height: 100vh;
+    overflow-y: auto;
+  }
+
   .adm-table {
     font-size: .64rem;
+    min-width: 540px;
+    width: 100%;
+    margin: 0;
   }
 
   .adm-header {
@@ -972,6 +1156,35 @@
 
   .adm-actions {
     align-self: flex-end;
+  }
+
+  .adm-users-controls {
+    flex-direction: column;
+    align-items: stretch;
+  }
+
+  .adm-filter {
+    width: 100%;
+  }
+
+  /* On mobile the table should scroll horizontally if needed */
+  .adm-table-wrap {
+    overflow-x: auto;
+    overflow-y: visible;
+    flex: initial;
+    max-height: none;
+  }
+
+  .adm-scroll {
+    padding-bottom: 96px; /* breathing room for bottom content */
+    overflow: visible;
+  }
+
+  .adm-detail-surface,
+  .adm-detail-surface.center-meta {
+    margin-left: .5rem;
+    margin-right: .5rem;
+    width: auto;
   }
 }
 
@@ -1177,4 +1390,24 @@
 
 .notifications-container .notice:nth-child(n+8) {
   opacity: .55;
+}
+
+/* Mobile adjustments for notifications */
+@media (max-width: 480px) {
+  .notifications-container {
+    left: 12px;
+    right: 12px;
+    width: auto;
+    max-width: none;
+    bottom: calc(12px + env(safe-area-inset-bottom));
+    align-items: stretch;
+  }
+  .notice {
+    max-height: 40vh;
+    overflow: auto;
+    border-radius: 12px;
+  }
+  .notice-actions { flex-direction: row; gap: .5rem; }
+  .notice-action { flex: 1 0 auto; text-align: center; }
+  .notice-close { right: 8px; top: 8px; }
 }

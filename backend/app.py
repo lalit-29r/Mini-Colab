@@ -55,19 +55,32 @@ if not DATABASE_URL:
 
 try:
     if DATABASE_URL.startswith("sqlite"):
-        engine = create_engine(DATABASE_URL, connect_args={"check_same_thread": False})
+        # SQLite: allow cross-thread usage for uvicorn and disable same-thread guard
+        engine = create_engine(
+            DATABASE_URL,
+            connect_args={"check_same_thread": False},
+            pool_pre_ping=True,
+        )
     else:
-        engine = create_engine(DATABASE_URL)
-    
+        # Server DBs: increase pool and enable pre-ping to avoid stale connections
+        pool_size = int(os.getenv("DB_POOL_SIZE", "10"))
+        max_overflow = int(os.getenv("DB_MAX_OVERFLOW", "20"))
+        engine = create_engine(
+            DATABASE_URL,
+            pool_size=pool_size,
+            max_overflow=max_overflow,
+            pool_pre_ping=True,
+        )
+
     SessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=engine)
     Base = declarative_base()
-    
+
     print(f"Using database: {DATABASE_URL}")
-    
+
 except Exception as e:
     print(f"Database connection failed: {e}")
     DATABASE_URL = "sqlite:///./minicolab.db"
-    engine = create_engine(DATABASE_URL, connect_args={"check_same_thread": False})
+    engine = create_engine(DATABASE_URL, connect_args={"check_same_thread": False}, pool_pre_ping=True)
     SessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=engine)
     Base = declarative_base()
     print(f"Fallback to SQLite: {DATABASE_URL}")
@@ -528,68 +541,81 @@ async def admin_stats(x_admin_token: str | None = Header(default=None)):
 
 
 async def _gather_admin_stats():
-    """Aggregate per‑user container stats + jobs for admin HTTP / WS paths."""
+    """Aggregate per‑user container stats + jobs for admin HTTP / WS paths.
+    Fetch DB rows first, then close the session before running Docker calls.
+    """
     db = next(get_db())
     try:
         users = db.query(UserContainer).all()
-        user_rows = []
-        total_cpu = 0.0
-        total_mem_usage = 0
-        total_mem_limit = 0
-        for uc in users:
-            try:
-                container = await asyncio.to_thread(client.containers.get, uc.container_id)
-            except Exception:
-                user_rows.append({
-                    "username": uc.username,
-                    "container_id": uc.container_id,
-                    "status": "missing",
-                    "cpu_percent": 0.0,
-                    "mem_usage": 0,
-                    "mem_percent": 0.0,
-                    "workspace_size": _dir_size(os.path.join(BASE_WORKDIR, uc.session_id)) if getattr(uc, 'session_id', None) and os.path.exists(os.path.join(BASE_WORKDIR, uc.session_id)) else 0,
-                    "quota_bytes": getattr(uc, 'quota_bytes', 50 * 1024 * 1024),
-                    "shell_pid": None,
-                    "jobs": []
-                })
-                continue
-            cpu_percent, mem_usage, mem_limit, mem_percent, status = await _container_stats_safe(container)
-            total_cpu += cpu_percent
-            total_mem_usage += mem_usage
-            total_mem_limit += mem_limit
-            size = 0
-            if getattr(uc, 'session_id', None):
-                workspace_dir = os.path.join(BASE_WORKDIR, uc.session_id)
-                size = await asyncio.to_thread(_dir_size, workspace_dir) if os.path.exists(workspace_dir) else 0
-            shell_pid = None
-            jobs: list[dict[str, object]] = []
-            if status == "running":
-                try:
-                    shell_pid, jobs, _, _ = await _collect_jobs(container, uc.username, uc.container_id)
-                except Exception:
-                    # Non-fatal; leave jobs empty
-                    shell_pid = None
-            user_rows.append({
-                "username": uc.username,
-                "container_id": uc.container_id,
-                "status": status,
-                "cpu_percent": round(cpu_percent, 2),
-                "mem_usage": mem_usage,
-                "mem_percent": round(mem_percent, 2),
-                "workspace_size": size,
-                "quota_bytes": getattr(uc, 'quota_bytes', 50 * 1024 * 1024),
-                "shell_pid": shell_pid,
-                "jobs": jobs
-            })
-        overall = {
-            "containers": len(users),
-            "total_cpu_percent": round(total_cpu, 2),
-            "total_mem_usage": total_mem_usage,
-            "total_mem_percent": round((total_mem_usage / total_mem_limit) * 100.0, 2) if total_mem_limit > 0 else 0.0
-        }
-        return {"overall": overall, "users": user_rows}
+        # Snapshot minimal fields to plain dicts so we can safely close the session
+        records = [
+            {
+                "username": u.username,
+                "container_id": u.container_id,
+                "session_id": getattr(u, 'session_id', None),
+                "quota_bytes": getattr(u, 'quota_bytes', 50 * 1024 * 1024),
+            }
+            for u in users
+        ]
     finally:
         db.close()
+
+    user_rows = []
+    total_cpu = 0.0
+    total_mem_usage = 0
+    total_mem_limit = 0
+    for uc in records:
+        try:
+            container = await asyncio.to_thread(client.containers.get, uc["container_id"]) 
+        except Exception:
+            user_rows.append({
+                "username": uc["username"],
+                "container_id": uc["container_id"],
+                "status": "missing",
+                "cpu_percent": 0.0,
+                "mem_usage": 0,
+                "mem_percent": 0.0,
+                "workspace_size": _dir_size(os.path.join(BASE_WORKDIR, uc.get("session_id"))) if uc.get("session_id") and os.path.exists(os.path.join(BASE_WORKDIR, uc.get("session_id"))) else 0,
+                "quota_bytes": uc.get("quota_bytes", 50 * 1024 * 1024),
+                "shell_pid": None,
+                "jobs": []
+            })
+            continue
+        cpu_percent, mem_usage, mem_limit, mem_percent, status = await _container_stats_safe(container)
+        total_cpu += cpu_percent
+        total_mem_usage += mem_usage
+        total_mem_limit += mem_limit
+        size = 0
+        if uc.get("session_id"):
+            workspace_dir = os.path.join(BASE_WORKDIR, uc["session_id"])
+            size = await asyncio.to_thread(_dir_size, workspace_dir) if os.path.exists(workspace_dir) else 0
+        shell_pid = None
+        jobs: list[dict[str, object]] = []
+        if status == "running":
+            try:
+                shell_pid, jobs, _, _ = await _collect_jobs(container, uc["username"], uc["container_id"]) 
+            except Exception:
+                # Non-fatal; leave jobs empty
+                shell_pid = None
+        user_rows.append({
+            "username": uc["username"],
+            "container_id": uc["container_id"],
+            "status": status,
+            "cpu_percent": round(cpu_percent, 2),
+            "mem_usage": mem_usage,
+            "mem_percent": round(mem_percent, 2),
+            "workspace_size": size,
+            "quota_bytes": uc.get("quota_bytes", 50 * 1024 * 1024),
+            "shell_pid": shell_pid,
+            "jobs": jobs
+        })
+    overall = {
+        "containers": len(records),
+        "total_cpu_percent": round(total_cpu, 2),
+        "total_mem_usage": total_mem_usage,
+        "total_mem_percent": round((total_mem_usage / total_mem_limit) * 100.0, 2) if total_mem_limit > 0 else 0.0
+    }
+    return {"overall": overall, "users": user_rows}
 
 
 @app.websocket("/admin/ws/stats")
@@ -781,6 +807,42 @@ async def admin_set_quota(username: str = Form(...), quota_mb: int = Form(...), 
         db.close()
 
 
+@app.post("/admin/change-password")
+async def admin_change_password(
+    current_password: str = Form(...),
+    new_password: str = Form(...),
+    x_admin_token: str | None = Header(default=None)
+):
+    """Update the admin password after verifying the current password."""
+    _validate_admin(x_admin_token)
+    new_password = new_password or ""
+    if len(new_password) < 8:
+        raise HTTPException(status_code=400, detail="New password must be at least 8 characters long")
+    if new_password.lower().strip() in {"password", "admin", "admin123"}:
+        raise HTTPException(status_code=400, detail="Choose a stronger password")
+
+    db = next(get_db())
+    try:
+        record = db.query(AdminAuth).filter(AdminAuth.username == 'admin').first()
+        if record is None:
+            raise HTTPException(status_code=500, detail="Admin credentials not provisioned")
+        if not bcrypt.checkpw(current_password.encode('utf-8'), record.password_hash.encode('utf-8')):
+            raise HTTPException(status_code=401, detail="Current password is incorrect")
+        if bcrypt.checkpw(new_password.encode('utf-8'), record.password_hash.encode('utf-8')):
+            raise HTTPException(status_code=400, detail="New password must be different")
+
+        new_hash = bcrypt.hashpw(new_password.encode('utf-8'), bcrypt.gensalt(rounds=12)).decode('utf-8')
+        record.password_hash = new_hash
+        record.failed_count = 0
+        record.window_start = None
+        record.locked_until = None
+        record.updated_at = datetime.utcnow()
+        db.commit()
+        return {"message": "Password updated successfully"}
+    finally:
+        db.close()
+
+
 @app.get("/quota-usage/{username}")
 async def quota_usage(username: str):
     """Return storage usage & quota (frontend friendly)."""
@@ -812,36 +874,35 @@ async def auth(username: str = Form(...)):
         raise HTTPException(status_code=400, detail="Invalid username")
 
     uname = username.strip()
+    # Acquire DB only to fetch the record, then release immediately to avoid holding a pool slot
+    existing = None
     db = next(get_db())
     try:
         existing = get_user_container(db, uname)
-        container_running = False
-        container_id = None
-        if existing:
-            container_id = existing.container_id
-            # Check if container actually running (non-blocking via thread)
-            try:
-                container = await asyncio.to_thread(client.containers.get, existing.container_id)
-                await asyncio.to_thread(container.reload)
-                if container.status == "running":
-                    container_running = True
-                else:
-                    # stale record, treat as not running
-                    pass
-            except docker.errors.NotFound:
-                # Container removed externally; treat as not running
-                pass
-            except Exception as e:
-                # Log and continue without failing auth
-                print(f"Auth check warning for {uname}: {e}")
-        return {
-            "message": f"User {uname} authenticated",
-            "username": uname,
-            "has_container": container_running,
-            "container_id": container_id if container_running else None
-        }
     finally:
         db.close()
+
+    container_running = False
+    container_id = None
+    if existing:
+        container_id = existing.container_id
+        # Check if container actually running (offloaded)
+        try:
+            container = await asyncio.to_thread(client.containers.get, existing.container_id)
+            await asyncio.to_thread(container.reload)
+            if container.status == "running":
+                container_running = True
+        except docker.errors.NotFound:
+            pass
+        except Exception as e:
+            # Log and continue without failing auth
+            print(f"Auth check warning for {uname}: {e}")
+    return {
+        "message": f"User {uname} authenticated",
+        "username": uname,
+        "has_container": container_running,
+        "container_id": container_id if container_running else None
+    }
 
 
 @app.post("/login")
@@ -1131,18 +1192,26 @@ async def create_file(username: str = Form(...), filepath: str = Form(...), file
         if not os.path.abspath(full_path).startswith(os.path.abspath(user_workdir)):
             raise HTTPException(status_code=400, detail="Invalid file path")
 
+        # Prevent overwriting existing entries (match VS Code behavior)
+        if os.path.exists(full_path):
+            raise HTTPException(status_code=409, detail="File or folder already exists")
+
         if file_type == "folder":
-            os.makedirs(full_path, exist_ok=True)
+            os.makedirs(full_path, exist_ok=False)
             return {"message": f"Folder created: {filepath}"}
         else:
             # Create parent directories if they don't exist
             parent_dir = os.path.dirname(full_path)
             os.makedirs(parent_dir, exist_ok=True)
 
-            # Create empty file
-            with open(full_path, "w", encoding="utf-8") as f:
-                f.write("")
-
+            # Create empty file (fail if file unexpectedly appears between checks)
+            flags = os.O_CREAT | os.O_EXCL | os.O_WRONLY
+            try:
+                fd = os.open(full_path, flags)
+                with os.fdopen(fd, "w", encoding="utf-8") as f:
+                    f.write("")
+            except FileExistsError:
+                raise HTTPException(status_code=409, detail="File already exists")
             return {"message": f"File created: {filepath}"}
     
     except SQLAlchemyError as e:
@@ -1254,7 +1323,24 @@ async def upload_files(username: str = Form(...), files: list[UploadFile] = File
         os.makedirs(target_dir, exist_ok=True)
         uploaded_files = []
 
-        # Quota check: pre-read all sizes first
+        # Conflict check: do NOT overwrite existing files (VS Code-like behavior)
+        names = [file.filename for file in files if file.filename]
+        # Reject duplicate names within the same upload batch
+        dup_names = {n for n in names if n and names.count(n) > 1}
+        if dup_names:
+            raise HTTPException(status_code=409, detail=f"Duplicate filenames in upload: {', '.join(sorted(dup_names))}")
+
+        conflicts: list[str] = []
+        for name in names:
+            if not name:
+                continue
+            candidate = os.path.join(target_dir, name)
+            if os.path.exists(candidate):
+                conflicts.append(name)
+        if conflicts:
+            raise HTTPException(status_code=409, detail=f"File(s) already exist: {', '.join(conflicts)}")
+
+        # Quota check: pre-read all sizes first (only after conflict-free)
         quota_bytes = getattr(user_container, 'quota_bytes', 50 * 1024 * 1024)
         current_total = _dir_size(user_workdir)
         incoming_total = 0
@@ -1269,8 +1355,14 @@ async def upload_files(username: str = Form(...), files: list[UploadFile] = File
         # Write after passing check
         for fname, content in file_blobs:
             file_path = os.path.join(target_dir, fname)
-            with open(file_path, "wb") as buffer:
-                buffer.write(content)
+            # Use exclusive creation to avoid races
+            try:
+                fd = os.open(file_path, os.O_CREAT | os.O_EXCL | os.O_WRONLY)
+                with os.fdopen(fd, "wb") as buffer:
+                    buffer.write(content)
+            except FileExistsError:
+                # Should not happen due to pre-check, but guard anyway
+                raise HTTPException(status_code=409, detail=f"File already exists: {fname}")
             uploaded_files.append(fname)
 
         return {"message": f"Uploaded {len(uploaded_files)} files", "files": uploaded_files}
