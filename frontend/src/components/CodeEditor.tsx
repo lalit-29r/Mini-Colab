@@ -1,6 +1,6 @@
 /* CodeEditor: Monaco wrapper with unsaved tracking & run/save actions (Python focused). */
 import React, { useState, useRef } from 'react';
-import Editor from '@monaco-editor/react';
+import Editor, { loader as monacoLoader } from '@monaco-editor/react';
 import { apiService } from '../services/api';
 import './CodeEditor.css';
 import { FileIcon } from './Icons';
@@ -21,6 +21,11 @@ interface CodeEditorProps {
   // When this value changes (increments), the editor will be focused. Used for new-file auto-focus.
   focusRequest?: number;
 }
+
+// Configure Monaco to load from local assets (public/monaco) to work offline
+try {
+  monacoLoader.config({ paths: { vs: '/monaco/vs' } });
+} catch {}
 
 const CodeEditor: React.FC<CodeEditorProps> = ({ 
   username, 

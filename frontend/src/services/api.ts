@@ -1,9 +1,11 @@
 import axios from 'axios';
 
-// Derive API/WS base dynamically to work on localhost and network links
+// Derive API/WS base dynamically to work on localhost, file:// and network links
 const loc = window.location;
 const isHttps = loc.protocol === 'https:';
-const defaultHost = loc.hostname; // use the same host you open the app on
+// When opened via file:// or with an empty hostname, default to localhost
+const inferredHost = (!loc.hostname || loc.protocol === 'file:') ? '127.0.0.1' : loc.hostname;
+const defaultHost = inferredHost; // use the same host you open the app on, with sensible fallback
 const defaultApiPort = process.env.REACT_APP_API_PORT || '8000';
 const resolvedHost = (process.env.REACT_APP_API_HOST || defaultHost).toString();
 

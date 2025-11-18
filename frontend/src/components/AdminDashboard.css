@@ -1135,6 +1135,10 @@
 	margin-top: .4rem;
 }
 
+.password-dialog .modal-actions {
+	justify-content: center;
+}
+
 .quota-dialog .modal-actions {
 	justify-content: center;
 }

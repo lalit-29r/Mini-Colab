@@ -615,13 +615,15 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({ token, changePasswordTr
                         onClick={() => {
                           const willExpand = !isExpanded;
                           setExpanded(willExpand ? u.username : null);
-                          if (willExpand) {
-                            setTimeout(() => {
-                              refreshTableSizing();
-                              scrollDetailIntoView(u.username);
-                            }, 50);
-                          } else {
-                            setTimeout(() => refreshTableSizing(), 50);
+                          if (!isMobile) {
+                            if (willExpand) {
+                              setTimeout(() => {
+                                refreshTableSizing();
+                                scrollDetailIntoView(u.username);
+                              }, 50);
+                            } else {
+                              setTimeout(() => refreshTableSizing(), 50);
+                            }
                           }
                         }}
                       >
@@ -632,13 +634,15 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({ token, changePasswordTr
                               e.stopPropagation();
                               const willExpand = !isExpanded;
                               setExpanded(willExpand?u.username:null);
-                              if (willExpand) {
-                                setTimeout(()=>{
-                                  refreshTableSizing();
-                                  scrollDetailIntoView(u.username);
-                                },50);
-                              } else {
-                                setTimeout(() => refreshTableSizing(), 50);
+                              if (!isMobile) {
+                                if (willExpand) {
+                                  setTimeout(()=>{
+                                    refreshTableSizing();
+                                    scrollDetailIntoView(u.username);
+                                  },50);
+                                } else {
+                                  setTimeout(() => refreshTableSizing(), 50);
+                                }
                               }
                             }}
                             className="adm-user-btn"
